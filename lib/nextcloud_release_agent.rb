@@ -1,0 +1,3 @@
+require_relative "nextcloud_release_agent/version"
+require_relative "nextcloud_release_agent/changelog_renderer"
+require_relative "nextcloud_release_agent/cli"

@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+
+require "nextcloud_release_agent"
+
+exit(NextcloudReleaseAgent::CLI.new(ARGV).run)

@@ -1,0 +1,5 @@
+*.gem
+*.lock
+.bundle/
+vendor/
+.vscode/
