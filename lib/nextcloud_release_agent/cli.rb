@@ -228,6 +228,8 @@ module NextcloudReleaseAgent
         update_metadata_files(context)
         commit_paths = [relative_path(@changelog_path), relative_path(@markdown_path), relative_path(@info_xml_path)]
         commit_release(branch_name, context[:version], commit_paths)
+        return if @options[:no_push]
+
         push_branch(branch_name)
         pr = create_pull_request(branch_name, context[:default_branch], context[:version], context[:release_notes])
         @logger.status("prepared release #{context[:version]} on #{branch_name}")
@@ -551,8 +553,6 @@ module NextcloudReleaseAgent
     end
 
     def push_branch(branch_name)
-      return if @options[:no_push]
-
       @logger.status("pushing #{branch_name} to #{@origin_remote}")
       git("push", "--set-upstream", @origin_remote, branch_name)
       pause_for_visibility("waiting for #{branch_name} to be visible on GitHub")
