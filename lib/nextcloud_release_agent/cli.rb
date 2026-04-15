@@ -1,6 +1,7 @@
 require "date"
 require "json"
 require "open3"
+require "thread"
 require "optparse"
 require "pathname"
 require "psych"
@@ -375,12 +376,40 @@ module NextcloudReleaseAgent
 
     def enrich_commits(commits)
       repo = remote_repo_slug(@origin_remote)
-      commits.each do |commit|
-        pulls = gh_api_json("repos/#{repo}/commits/#{commit.sha}/pulls", repo: repo, default: [])
-        pull = Array(pulls).first
-        next unless pull
+      mutex = Mutex.new
 
-        detail = gh_api_json("repos/#{repo}/pulls/#{pull.fetch('number')}", repo: repo)
+      # Step 1: fetch the PR number for each commit in parallel
+      commit_pr_numbers = {}
+      threads = commits.map do |commit|
+        Thread.new do
+          pulls = gh_api_json("repos/#{repo}/commits/#{commit.sha}/pulls", repo: repo, default: [])
+          pull = Array(pulls).first
+          next unless pull
+
+          mutex.synchronize { commit_pr_numbers[commit.sha] = pull.fetch("number") }
+        end
+      end
+      threads.each(&:join)
+
+      # Step 2: fetch PR details in parallel, deduplicating by PR number
+      unique_pr_numbers = commit_pr_numbers.values.uniq
+      pr_details = {}
+      threads = unique_pr_numbers.map do |pr_number|
+        Thread.new do
+          detail = gh_api_json("repos/#{repo}/pulls/#{pr_number}", repo: repo)
+          mutex.synchronize { pr_details[pr_number] = detail }
+        end
+      end
+      threads.each(&:join)
+
+      # Step 3: assign details back to each commit
+      commits.each do |commit|
+        pr_number = commit_pr_numbers[commit.sha]
+        next unless pr_number
+
+        detail = pr_details[pr_number]
+        next unless detail
+
         commit.pr_number = detail.fetch("number")
         commit.pr_title = detail.fetch("title")
         commit.pr_body = detail["body"].to_s
