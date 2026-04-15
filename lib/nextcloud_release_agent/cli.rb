@@ -358,7 +358,7 @@ module NextcloudReleaseAgent
       last_tag = git("describe", "--tags", "--abbrev=0", "--match", "v*", "HEAD", allow_failure: true)
       range = last_tag.status.zero? ? "#{last_tag.stdout.strip}..HEAD" : "HEAD"
       format = "%H%x1f%an%x1f%ae%x1f%s"
-      output = git("log", "--reverse", "--format=#{format}", range).stdout
+      output = git("log", "--no-merges", "--reverse", "--format=#{format}", range).stdout
       output.lines.filter_map do |line|
         sha, author_name, author_email, message = line.chomp.split("\u001F", 4)
         next if sha.nil? || sha.empty?
@@ -465,9 +465,17 @@ module NextcloudReleaseAgent
     end
 
     def build_changelog_entry(version, commits)
-      grouped = commits.group_by(&:section)
+      # De-duplicate commits that share the same PR (keep the first occurrence)
+      deduped_commits = commits.each_with_object({}) do |commit, seen|
+        key = commit.pr_number&.to_s || commit.sha
+        seen[key] ||= commit
+      end.values
+
+      grouped = deduped_commits.group_by(&:section)
       sections = ChangelogFile::SECTION_ORDER.filter_map do |section_name|
         items = Array(grouped[section_name]).map { |commit| build_changelog_item(commit) }
+        # De-duplicate items with identical text (different PRs/commits that produce the same summary)
+        items = items.uniq { |item| item["text"] }
         next if items.empty?
 
         { "name" => section_name, "items" => items }
