@@ -19,6 +19,7 @@ module NextcloudReleaseAgent
     :author_name,
     :author_email,
     :message,
+    :github_login,
     :pr_number,
     :pr_title,
     :pr_body,
@@ -394,15 +395,20 @@ module NextcloudReleaseAgent
       repo = remote_repo_slug(@origin_remote)
       mutex = Mutex.new
 
-      # Step 1: fetch the PR number for each commit in parallel
+      # Step 1: fetch the PR number and GitHub login for each commit in parallel
       commit_pr_numbers = {}
       threads = commits.map do |commit|
         Thread.new do
           pulls = gh_api_json("repos/#{repo}/commits/#{commit.sha}/pulls", repo: repo, default: [])
           pull = Array(pulls).first
-          next unless pull
 
-          mutex.synchronize { commit_pr_numbers[commit.sha] = pull.fetch("number") }
+          commit_data = gh_api_json("repos/#{repo}/commits/#{commit.sha}", repo: repo, default: {})
+          github_login = commit_data.dig("author", "login")
+
+          mutex.synchronize do
+            commit_pr_numbers[commit.sha] = pull.fetch("number") if pull
+            commit.github_login = github_login
+          end
         end
       end
       threads.each(&:join)
@@ -553,7 +559,7 @@ module NextcloudReleaseAgent
     end
 
     def normalize_authors(commit)
-      candidate = commit.pr_author || commit.author_name
+      candidate = commit.pr_author || commit.github_login
       return [] if candidate.nil?
 
       sanitized = candidate.strip.gsub(/\s+/, "-")
