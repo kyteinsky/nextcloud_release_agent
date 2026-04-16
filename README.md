@@ -41,6 +41,11 @@ ruby release_agent/exe/nextcloud-release-agent --help
 
 ## Usage
 
+Normalize `changelog.yaml` and re-render the markdown changelog
+```bash
+nextcloud-release-agent format
+```
+
 Prepare + publish in one shot
 ```bash
 nextcloud-release-agent run --monitor
@@ -68,9 +73,9 @@ nextcloud-release-agent monitor --repo translate2 2.4.0
 
 ## How it works
 
-**`run`**
+**`format`**
 
-Runs `prepare` then `publish` in one shot. Use this for the happy path.
+Normalizes `changelog.yaml` in-place (indentation, key ordering, section ordering: Added -> Changed -> Fixed) and re-renders the markdown changelog so both files are in sync. Useful after manually editing `changelog.yaml` or when adding it to an existing project.
 
 **`prepare`**
 
@@ -91,6 +96,10 @@ Runs `prepare` then `publish` in one shot. Use this for the happy path.
 3. Create and push `v<version>` to `origin` and `release`.
 4. Create GitHub releases in both remotes with the rendered changelog entry.
 5. Optionally monitor the resulting GitHub Actions runs (`--monitor`).
+
+**`run`**
+
+Runs `prepare` then `publish` in one shot. Use this for the happy path.
 
 ## Semver
 
@@ -161,7 +170,7 @@ A snapshot of the file in the nextcloud/translate2 repo can be found in `example
 2. For each release heading (`## x.y.z - YYYY-MM-DD`), add an entry under `entries:` with `version` and `release_date`.
 3. Map each sub-heading to a section (`### Added` → `name: Added`, etc.).
 4. For each bullet, set `text` (stripped of the leading `- `), `issue_number` (or `null`), and `authors` (GitHub handles, or `[]`).
-5. After creating the file, run `nextcloud-release-agent prepare --dry-run` to verify the rendered output matches your original markdown.
+5. Run `nextcloud-release-agent format --dry-run` to verify the rendered output matches your original markdown, then run it without `--dry-run` to normalize the YAML and regenerate the markdown file.
 
 ### Section ordering
 

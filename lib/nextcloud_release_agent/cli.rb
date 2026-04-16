@@ -126,6 +126,10 @@ module NextcloudReleaseAgent
       write!
     end
 
+    def normalize!
+      write!
+    end
+
     private
 
     def compile_regex(pattern)
@@ -220,6 +224,18 @@ module NextcloudReleaseAgent
       @release_remote = options[:release_remote]
       @release_remote_exists = remote_exists?(@release_remote)
       @logger.warn("release remote '#{@release_remote}' not found: skipping release remote steps") unless @release_remote_exists
+    end
+
+    def format_changelog
+      @logger.status("normalizing #{relative_path(@changelog_path)}")
+      if @options[:dry_run]
+        @logger.info("would write normalized #{relative_path(@changelog_path)}")
+        @logger.info("would render #{relative_path(@markdown_path)}")
+        return
+      end
+      @changelog.normalize!
+      render_markdown_changelog
+      @logger.status("wrote #{relative_path(@changelog_path)} and #{relative_path(@markdown_path)}")
     end
 
     def prepare
@@ -800,7 +816,7 @@ module NextcloudReleaseAgent
   end
 
   class CLI
-    SUBCOMMANDS = %w[prepare publish run monitor].freeze
+    SUBCOMMANDS = %w[format prepare publish run monitor].freeze
 
     def initialize(argv)
       @argv = argv.dup
@@ -817,6 +833,8 @@ module NextcloudReleaseAgent
 
       manager = ReleaseManager.new(options)
       case subcommand
+      when "format"
+        manager.format_changelog
       when "prepare"
         manager.prepare
       when "publish"
@@ -860,9 +878,10 @@ module NextcloudReleaseAgent
     def option_parser(options)
       OptionParser.new do |parser|
         parser.banner = <<~TEXT
-          Usage: nextcloud-release-agent <prepare|publish|run|monitor> [options] [version]
+          Usage: nextcloud-release-agent <format|prepare|publish|run|monitor> [options] [version]
 
           Commands:
+            format    Normalize changelog.yaml formatting and re-render the markdown changelog.
             prepare   Update changelog and appinfo, create a release branch, push it, and open a PR.
             publish   Merge the PR if possible, tag the merge commit, push tags, create releases, and optionally monitor workflows.
             run       Execute prepare and publish in one pass.
