@@ -211,6 +211,7 @@ module NextcloudReleaseAgent
   class ReleaseManager
     RELEASE_EVENT = "release".freeze
     PUSH_EVENT = "push".freeze
+    PASSED_CONCLUSIONS = %w[success cancelled skipped neutral].freeze
 
     def initialize(options)
       @options = options
@@ -283,8 +284,14 @@ module NextcloudReleaseAgent
       commit_sha = git("rev-parse", "HEAD").stdout.strip
       tag_name = "v#{version}"
       @logger.status("monitoring workflow runs for #{tag_name}")
-      monitor_repo_runs(@origin_remote, PUSH_EVENT, commit_sha, version)
-      monitor_repo_runs(@release_remote, RELEASE_EVENT, commit_sha, version) if @release_remote_exists
+
+      targets = [[@origin_remote, PUSH_EVENT]]
+      targets << [@release_remote, RELEASE_EVENT] if @release_remote_exists
+
+      threads = targets.map do |remote_name, event|
+        Thread.new { monitor_repo_runs(remote_name, event, commit_sha, version) }
+      end
+      threads.each(&:join)
     end
 
     private
@@ -744,43 +751,84 @@ module NextcloudReleaseAgent
     def monitor_repo_runs(remote_name, event, commit_sha, version)
       repo = remote_repo_slug(remote_name)
       deadline = Time.now + @options[:poll_timeout]
-      matching_run = nil
 
+      # GitHub creates check suites synchronously when processing a webhook.
+      # If no GitHub Actions suite exists for this commit, no workflow will run.
+      # Retry once to absorb webhook processing delay.
+      unless github_actions_suite?(repo, commit_sha)
+        sleep(@options[:poll_interval]) unless @options[:dry_run]
+        unless github_actions_suite?(repo, commit_sha)
+          @logger.info("no GitHub Actions workflows triggered for #{remote_name} (#{event}); skipping")
+          return
+        end
+      end
+
+      # Poll for a run matching the expected event. Bail early once all check
+      # suites are completed — if no run has appeared by then, none will.
       loop do
-        runs = gh_api_json("repos/#{repo}/actions/runs?event=#{event}&per_page=20", repo: repo, default: {}).fetch("workflow_runs", [])
-        matching_run = runs.find do |run|
-          run.fetch("head_sha", "") == commit_sha || run.fetch("display_title", "").include?(version)
+        runs = gh_api_json(
+          "repos/#{repo}/actions/runs?event=#{event}&head_sha=#{commit_sha}&per_page=20",
+          repo: repo, default: {}
+        ).fetch("workflow_runs", [])
+
+        if (matching_run = runs.first)
+          poll_run_to_completion(repo, matching_run, remote_name, deadline)
+          return
         end
 
-        break if matching_run || Time.now >= deadline
+        if github_actions_suites_completed?(repo, commit_sha)
+          @logger.info("all check suites completed; no #{event} workflow run for #{remote_name}")
+          return
+        end
+
+        if Time.now >= deadline
+          @logger.warn("timed out waiting for #{remote_name} #{event} workflow run to appear")
+          return
+        end
 
         @logger.info("waiting for #{remote_name} #{event} workflow run")
         sleep(@options[:poll_interval]) unless @options[:dry_run]
       end
+    end
 
-      unless matching_run
-        @logger.warn("no matching #{event} workflow run found in #{remote_name}")
-        return
-      end
-
+    def poll_run_to_completion(repo, run, remote_name, deadline)
       loop do
-        run = gh_api_json("repos/#{repo}/actions/runs/#{matching_run.fetch('id')}", repo: repo)
+        run = gh_api_json("repos/#{repo}/actions/runs/#{run.fetch('id')}", repo: repo)
         status = run.fetch("status")
         conclusion = run["conclusion"]
         if status == "completed"
-          if conclusion == "success"
-            @logger.info("workflow succeeded: #{run.fetch('html_url')}")
+          if PASSED_CONCLUSIONS.include?(conclusion)
+            @logger.info("workflow #{conclusion}: #{run.fetch('html_url')}")
           else
             @logger.warn("workflow #{conclusion || 'failed'}: #{run.fetch('html_url')}")
           end
           return
         end
 
-        raise Error, "timed out waiting for workflow #{run.fetch('html_url')}" if Time.now >= deadline
+        if Time.now >= deadline
+          @logger.warn("timed out waiting for workflow #{run.fetch('html_url')}")
+          return
+        end
 
         @logger.info("workflow #{run.fetch('name')} is #{status}; sleeping #{@options[:poll_interval]}s")
         sleep(@options[:poll_interval]) unless @options[:dry_run]
       end
+    end
+
+    def github_actions_suite?(repo, commit_sha)
+      fetch_check_suites(repo, commit_sha).any? { |s| s.dig("app", "slug") == "github-actions" }
+    end
+
+    def github_actions_suites_completed?(repo, commit_sha)
+      suites = fetch_check_suites(repo, commit_sha).select { |s| s.dig("app", "slug") == "github-actions" }
+      suites.any? && suites.all? { |s| s.fetch("status") == "completed" }
+    end
+
+    def fetch_check_suites(repo, commit_sha)
+      gh_api_json(
+        "repos/#{repo}/commits/#{commit_sha}/check-suites",
+        repo: repo, default: {}
+      ).fetch("check_suites", [])
     end
 
     def relative_path(path)
