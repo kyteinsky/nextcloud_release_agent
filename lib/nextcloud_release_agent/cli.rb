@@ -876,7 +876,7 @@ module NextcloudReleaseAgent
         no_push: false,
         allow_dirty: false,
         monitor: false,
-        poll_interval: 15,
+        poll_interval: 5,
         poll_timeout: 1800
       }
     end
