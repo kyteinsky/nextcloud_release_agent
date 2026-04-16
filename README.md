@@ -41,19 +41,14 @@ ruby release_agent/exe/nextcloud-release-agent --help
 
 ## Usage
 
-Normalize `changelog.yaml` and re-render the markdown changelog
-```bash
-nextcloud-release-agent format
-```
-
-Prepare + publish in one shot
-```bash
-nextcloud-release-agent run --monitor
-```
-
 Create release PR only
 ```bash
 nextcloud-release-agent prepare
+```
+
+Create release branch with changes locally, no push
+```bash
+nextcloud-release-agent prepare --no-push
 ```
 
 Merge, tag, release
@@ -69,6 +64,16 @@ nextcloud-release-agent monitor
 Watch Github Actions for a specific version
 ```bash
 nextcloud-release-agent monitor --repo translate2 2.4.0
+```
+
+Prepare + publish in one shot
+```bash
+nextcloud-release-agent run --monitor
+```
+
+Normalize `changelog.yaml` and re-render the markdown changelog, should be done at the start
+```bash
+nextcloud-release-agent format
 ```
 
 ## How it works
@@ -100,6 +105,10 @@ Normalizes `changelog.yaml` in-place (indentation, key ordering, section orderin
 **`run`**
 
 Runs `prepare` then `publish` in one shot. Use this for the happy path.
+
+**`monitor`**
+
+Watches GitHub Actions for the latest version or a specific version.
 
 ## Semver
 
@@ -165,6 +174,10 @@ entries:
 A snapshot of the file in the nextcloud/translate2 repo can be found in `example/changelog.yaml`.
 
 ### Steps
+
+The `changelog.yaml` format is straightforward enough that you can populate it with AI in one shot. The existing changelog markdown is typically unstructured (inconsistent headings, mixed formats, missing issue numbers, author names instead of handles). Paste it into any capable model along with the schema from the example above and ask it to produce a valid `changelog.yaml`. Review the output for accuracy, then run `format` to normalise and verify the rendered markdown matches, or commit the newly rendered one.
+
+If you prefer to do it manually:
 
 1. Copy the `markdown_preamble` verbatim from the top of your existing changelog markdown (the copyright header and intro text).
 2. For each release heading (`## x.y.z - YYYY-MM-DD`), add an entry under `entries:` with `version` and `release_date`.
