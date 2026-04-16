@@ -144,31 +144,32 @@ markdown_preamble: |-
   and this project adheres to [Semantic Versioning](http://semver.org/).
 release_agent:
   ignore_commits:
-    - author: "^pre-commit-ci\\[bot\\]$"
-    - author: "^Nextcloud-bot$"
-    - email: "bot@nextcloud.com"
-    - author: "^dependabot\\[bot\\]$"
+  - author: "^pre-commit-ci\\[bot\\]$"
+  - author: "^Nextcloud-bot$"
+  - email: bot@nextcloud.com
+  - author: "^dependabot\\[bot\\]$"
+  - message: "^chore(changelog):"
 entries:
-  - version: "1.2.3"
-    release_date: "2024-01-15"
-    sections:
-      - name: Added
-        items:
-          - text: some new feature
-            issue_number: 42
-            authors:
-              - your-github-handle
-      - name: Changed
-        items:
-          - text: something that changed
-            issue_number: null
-            authors: []
-      - name: Fixed
-        items:
-          - text: some bug fix
-            issue_number: 7
-            authors:
-              - contributor-handle
+- version: 1.2.3
+  release_date: '2024-01-15'
+  sections:
+  - name: Added
+    items:
+    - text: some new feature
+      authors:
+      - your-github-handle
+      issue_number: 42
+  - name: Changed
+    items:
+    - text: something that changed
+      authors: []
+      issue_number:
+  - name: Fixed
+    items:
+    - text: some bug fix
+      authors:
+      - contributor-handle
+      issue_number: 7
 ```
 
 A snapshot of the file in the nextcloud/translate2 repo can be found in `example/changelog.yaml`.

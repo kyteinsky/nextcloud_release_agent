@@ -15,8 +15,9 @@ release_agent:
   ignore_commits:
   - author: "^pre-commit-ci\\[bot\\]$"
   - author: "^Nextcloud-bot$"
-  - email: "bot@nextcloud.com"
+  - email: bot@nextcloud.com
   - author: "^dependabot\\[bot\\]$"
+  - message: "^chore(changelog):"
 entries:
 - version: 2.3.1
   release_date: '2026-04-06'
